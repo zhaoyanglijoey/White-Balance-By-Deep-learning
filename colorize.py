@@ -37,17 +37,18 @@ def train(args):
     trainset = utils.FlatImageFolder(args.dataset, transform, pert_transform)
     trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, pin_memory=True)
     model = TransformerNet()
-    if torch.cuda.device_count() > 1:
+    if args.gpus is not None:
+        model = nn.DataParallel(model, device_ids=args.gpus)
+    else:
         model = nn.DataParallel(model)
     if args.resume:
         state_dict = torch.load(args.resume)
-        for k in state_dict:
-            if k.startswith('module'):
-                model = nn.DataParallel(model)
-            break
+        # for k in state_dict:
+        #     if k.startswith('module'):
+        #         model = nn.DataParallel(model)
+        #     break
         model.load_state_dict(state_dict)
-    if args.gpus is not None:
-        model = nn.DataParallel(model, device_ids=args.gpus)
+
 
     model.to(device)
     print('training on', device)
@@ -115,12 +116,14 @@ def evaluate(args):
 
     model = TransformerNet()
     state_dict = torch.load(args.model)
-    for k in state_dict:
-        if k.startswith('module'):
-            model = nn.DataParallel(model)
-        break
+    # for k in state_dict:
+    #     if k.startswith('module'):
+    #         model = nn.DataParallel(model)
+    #     break
     if args.gpus is not None:
         model = nn.DataParallel(model, device_ids=args.gpus)
+    else:
+        model = nn.DataParallel(model)
     model.load_state_dict(state_dict)
     model.to(device)
 
