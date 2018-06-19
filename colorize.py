@@ -23,7 +23,7 @@ def train(args):
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
 
-    device = torch.device('cuda' if args.cuda and torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cuda' if args.cuda and torch.cuda.is_available() else 'cpu')
 
     transform = transforms.Compose([
         transforms.Resize(args.image_size),
@@ -35,7 +35,7 @@ def train(args):
         utils.ColorPerturb()
     ])
     trainset = utils.FlatImageFolder(args.dataset, transform, pert_transform)
-    trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, pin_memory=True)
+    trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=4)
     model = TransformerNet()
     if args.gpus is not None:
         model = nn.DataParallel(model, device_ids=args.gpus)
@@ -43,18 +43,12 @@ def train(args):
         model = nn.DataParallel(model)
     if args.resume:
         state_dict = torch.load(args.resume)
-        # for k in state_dict:
-        #     if k.startswith('module'):
-        #         model = nn.DataParallel(model)
-        #     break
+
         model.load_state_dict(state_dict)
 
+    if args.cuda:
+        model.cuda()
 
-    model.to(device)
-    print('training on', device)
-    # for para in model.parameters():
-    #     print(para.data.type())
-    #     break
     optimizer = torch.optim.Adam(model.parameters(), args.lr)
     criterion = nn.MSELoss()
 
@@ -66,8 +60,9 @@ def train(args):
         acc_loss = 0.0
         for batchi, (pert_img, ori_img) in enumerate(trainloader):
             count += len(pert_img)
-            pert_img = pert_img.to(device)
-            ori_img = ori_img.to(device)
+            if args.cuda:
+                pert_img = pert_img.cuda(non_blocking=True)
+                ori_img = ori_img.cuda(non_blocking=True)
 
             optimizer.zero_grad()
 
@@ -88,7 +83,7 @@ def train(args):
             ckpt_filename = 'ckpt_epoch_' + str(e+1) + '.pth'
             ckpt_path = osp.join(args.checkpoint_dir, ckpt_filename)
             torch.save(model.state_dict(), ckpt_path)
-            model.to(device).train()
+            model.cuda().train()
             print('Checkpoint model at epoch %d saved' % (e+1))
 
     model.eval().cpu()
@@ -112,21 +107,18 @@ def check_path(path):
         sys.exit(1)
 
 def evaluate(args):
-    device = torch.device('cuda' if args.cuda and torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cuda' if args.cuda and torch.cuda.is_available() else 'cpu')
 
     model = TransformerNet()
     state_dict = torch.load(args.model)
-    # for k in state_dict:
-    #     if k.startswith('module'):
-    #         model = nn.DataParallel(model)
-    #     break
+
     if args.gpus is not None:
         model = nn.DataParallel(model, device_ids=args.gpus)
     else:
         model = nn.DataParallel(model)
     model.load_state_dict(state_dict)
-    model.to(device)
-
+    if args.cuda:
+        model.cuda()
 
     with torch.no_grad():
         for root, dirs, filenames in os.walk(args.input_dir):
@@ -135,7 +127,8 @@ def evaluate(args):
                     impath = osp.join(root, filename)
                     img = utils.load_image(impath)
                     img = img.unsqueeze(0)
-                    img.to(device)
+                    if args.cuda:
+                        img.cuda()
                     rec_img = model(img).cpu()
                     save_path = osp.join(args.output_dir, filename)
                     utils.save_image(rec_img[0], save_path)
