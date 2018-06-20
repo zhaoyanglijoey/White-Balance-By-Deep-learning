@@ -131,7 +131,7 @@ def evaluate(args):
                         img.cuda()
                     rec_img = model(img).cpu()
                     save_path = osp.join(args.output_dir, filename)
-                    utils.save_image(rec_img[0], save_path)
+                    utils.save_image(rec_img[0], img[0].cpu(), save_path)
 
 
 

@@ -6,7 +6,7 @@ import os.path as osp
 import os
 import torch
 import numpy as np
-
+import math
 
 IMG_EXTENSIONS = [
     '.jpg', '.JPG', '.jpeg', '.JPEG',
@@ -27,8 +27,22 @@ def load_image(path):
     return img
 
 
-def save_image(tensor, dir):
-    if tensor.max > 1:
+def save_image(tensor, ori, dir):
+    if tensor.size() != ori.size():
+        print(tensor.size(), ori.size())
+    reclen = tensor.clone() ** 2
+    reclen = reclen.sum(dim=0).sqrt()
+    orilen = ori.clone() ** 2
+    orilen = orilen.sum(dim=0).sqrt()
+    tensor = tensor / reclen * orilen
+
+    # for i in range(w):
+    #     for j in range(h):
+    #         orilen = math.sqrt((ori[:, i, j] ** 2).sum())
+    #         reclen = math.sqrt((tensor[:, i, j] ** 2).sum())
+    #         tensor[:, i, j] = tensor[:, i, j] / reclen * orilen
+
+    if tensor.max() > 1:
         tensor = tensor / tensor.max()
     img = tensor.clone().mul(255).clamp(0, 255).numpy()
     img = img.transpose(1, 2, 0).astype('uint8')
