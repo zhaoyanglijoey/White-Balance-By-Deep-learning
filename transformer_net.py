@@ -26,6 +26,7 @@ class TransformerNet(nn.Module):
 
         self.relu = nn.ReLU()
         self.tanh = nn.Tanh()
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         out = self.relu(self.ins1(self.conv1(x)))
@@ -38,7 +39,7 @@ class TransformerNet(nn.Module):
         out = self.res5(out)
         out = self.relu(self.ins4(self.deconv1(out)))
         out = self.relu(self.ins5(self.deconv2(out)))
-        out = self.tanh(self.deconv3(out))
+        out = self.sigmoid(self.deconv3(out))
         return out
 
 

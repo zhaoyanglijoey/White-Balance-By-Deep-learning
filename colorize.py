@@ -35,7 +35,7 @@ def train(args):
         utils.ColorPerturb()
     ])
     trainset = utils.FlatImageFolder(args.dataset, transform, pert_transform)
-    trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=4)
+    trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=4)
     model = TransformerNet()
     if args.gpus is not None:
         model = nn.DataParallel(model, device_ids=args.gpus)

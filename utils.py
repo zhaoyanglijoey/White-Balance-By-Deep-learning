@@ -28,6 +28,8 @@ def load_image(path):
 
 
 def save_image(tensor, dir):
+    if tensor.max > 1:
+        tensor = tensor / tensor.max()
     img = tensor.clone().mul(255).clamp(0, 255).numpy()
     img = img.transpose(1, 2, 0).astype('uint8')
     io.imsave(dir, img)
@@ -47,7 +49,6 @@ class ColorPerturb():
 
     def __call__(self, tensor_img):
         img = tensor_img.numpy()
-
 
         if np.random.uniform(-2, 1) > 0:
             perturb = np.random.uniform(0.6, 1.4)
@@ -81,9 +82,8 @@ class ColorPerturb():
                 img[0, :, :] = np.dot(perturb, img[0, :, :])
                 img[2, :, :] = np.dot(perturb, img[2, :, :])
 
-        if (img > 1).sum() > 0:
-            maxV = img.max()
-            img = img / maxV
+        if img.max() > 1:
+            img = img / img.max()
         img = torch.from_numpy(img)
         return img
 
