@@ -148,17 +148,17 @@ def main():
 
     train_parser = subparsers.add_parser('train', help='train the network')
     train_parser.add_argument('--epochs', type=int, default=2, help='number of training epochs, default is 2')
-    train_parser.add_argument('--batch-size', type=int, default=30, help='training batch size, default is 4')
+    train_parser.add_argument('--batch-size', type=int, default=30, help='training batch size, default is 30')
     train_parser.add_argument('--dataset', required=True, help='path to training dataset, the path should '
                                 'point to a folder containing another folder with all the training images')
-    train_parser.add_argument('--save-model-dir', default='model', help='directory of the model to be saved')
+    train_parser.add_argument('--save-model-dir', default='model', help='directory of the model to be saved, default is model/')
     train_parser.add_argument('--save-model-name', default=None, help='save model name')
     train_parser.add_argument('--image-size', type=int, default=256, help='size of training images, default is 256')
     train_parser.add_argument('--cuda', action='store_true', default=False, help='run on GPU')
     train_parser.add_argument('--seed', type=int, default=42, help='random seed for training')
     train_parser.add_argument('--lr', type=float, default=1e-3, help='learning rate, default is 0.001')
-    train_parser.add_argument('--log-interval', type=int, default=100, help='number of images after which the training loss is logged,'
-                                                                            ' default is 500')
+    train_parser.add_argument('--log-interval', type=int, default=100, help='number of batches after which the training loss is logged,'
+                                                                            ' default is 100')
     train_parser.add_argument('--checkpoint-dir', default=None, help='checkpoint model saving directory')
     train_parser.add_argument('--resume', default=None, help='resume training from saved model')
     train_parser.add_argument('--gpus', type=int, nargs='*', default=None, help='specify GPUs to use')
