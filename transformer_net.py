@@ -22,7 +22,7 @@ class TransformerNet(nn.Module):
         self.ins4 = nn.InstanceNorm2d(64, affine=True)
         self.deconv2 = UpsampleConvLayer(64, 32, kernel_size=3, stride=1, upsample=2)
         self.ins5 = nn.InstanceNorm2d(32, affine=True)
-        self.deconv3 = ConvLayer(32, 3, kernel_size=9, stride=1)
+        self.deconv3 = ConvLayer(32, 2, kernel_size=9, stride=1)
 
         self.relu = nn.ReLU()
         self.tanh = nn.Tanh()

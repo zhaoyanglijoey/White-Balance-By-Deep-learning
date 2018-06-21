@@ -28,8 +28,9 @@ def train(args):
     transform = transforms.Compose([
         transforms.Resize(args.image_size),
         transforms.CenterCrop(args.image_size),
+        utils.RGB2LAB(),
         transforms.ToTensor(),
-        # transforms.Lambda(lambda x: x.mul(255))
+        # utils.LAB2Tensor(),
     ])
     pert_transform = transforms.Compose([
         utils.ColorPerturb()
@@ -43,7 +44,6 @@ def train(args):
         model = nn.DataParallel(model)
     if args.resume:
         state_dict = torch.load(args.resume)
-
         model.load_state_dict(state_dict)
 
     if args.cuda:
@@ -66,8 +66,8 @@ def train(args):
 
             optimizer.zero_grad()
 
-            rec_img = model(pert_img)
-            loss = criterion(rec_img, ori_img)
+            rec_ab = model(pert_img)
+            loss = criterion(rec_ab, ori_img[:, 1:, :, :])
             loss.backward()
             optimizer.step()
 
@@ -75,8 +75,9 @@ def train(args):
 
             if (batchi + 1) % args.log_interval == 0:
                 mesg = '{}\tEpoch {}: [{}/{}]\ttotal loss: {:.6f}'.format(
-                    time.ctime(), e + 1, count, len(trainset), acc_loss/(batchi + 1))
+                    time.ctime(), e + 1, count, len(trainset), acc_loss/(args.log_interval))
                 print(mesg)
+                acc_loss = 0.0
 
         if args.checkpoint_dir:
             model.eval().cpu()
@@ -125,13 +126,19 @@ def evaluate(args):
             for filename in filenames:
                 if utils.is_image_file(filename):
                     impath = osp.join(root, filename)
-                    img = utils.load_image(impath)
+                    img = utils.load_labimage(impath)
                     img = img.unsqueeze(0)
                     if args.cuda:
                         img.cuda()
-                    rec_img = model(img).cpu()
+                    rec_ab = model(img).cpu()
+                    img, rec_ab = img[0], rec_ab[0]
+                    utils.save_labimage(img, osp.join(args.output_dir, filename.replace('.', 'ori.')))
+                    img[1:] = rec_ab
+                    # print(rec_ab)
+                    # rec_img = torch.cat((img[0, :, :].unsqueeze(0), rec_ab))
                     save_path = osp.join(args.output_dir, filename)
-                    utils.save_image(rec_img[0], img[0].cpu(), save_path)
+                    utils.save_labimage(img, save_path)
+
 
 
 

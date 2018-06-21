@@ -1,12 +1,13 @@
 from torch.utils.data import Dataset
 from torchvision import transforms
-from skimage import io
+from skimage import io, color
 from PIL import Image
 import os.path as osp
 import os
 import torch
 import numpy as np
 import math
+import cv2
 
 IMG_EXTENSIONS = [
     '.jpg', '.JPG', '.jpeg', '.JPEG',
@@ -26,6 +27,11 @@ def load_image(path):
     # img = torch.from_numpy(img).float()
     return img
 
+def load_labimage(path):
+    img = Image.open(path).convert('RGB')
+    img = RGB2LAB()(img)
+    img = transforms.ToTensor()(img)
+    return img
 
 def save_image(tensor, ori, dir):
     if tensor.size() != ori.size():
@@ -36,18 +42,17 @@ def save_image(tensor, ori, dir):
     orilen = orilen.sum(dim=0).sqrt()
     tensor = tensor / reclen * orilen
 
-    # for i in range(w):
-    #     for j in range(h):
-    #         orilen = math.sqrt((ori[:, i, j] ** 2).sum())
-    #         reclen = math.sqrt((tensor[:, i, j] ** 2).sum())
-    #         tensor[:, i, j] = tensor[:, i, j] / reclen * orilen
-
     if tensor.max() > 1:
         tensor = tensor / tensor.max()
     img = tensor.clone().mul(255).clamp(0, 255).numpy()
     img = img.transpose(1, 2, 0).astype('uint8')
     io.imsave(dir, img)
 
+def save_labimage(tensor, dir):
+    img = tensor.clone().mul(255).clamp(0, 255).numpy()
+    img = img.transpose(1, 2, 0).astype('uint8')
+    img = cv2.cvtColor(img, cv2.COLOR_Lab2RGB)
+    io.imsave(dir, img)
 
 def iter_dir(dir):
     images = []
@@ -58,22 +63,33 @@ def iter_dir(dir):
                 images.append(path)
     return images
 
+class RGB2LAB():
+    def __call__(self, img):
+        npimg = np.array(img)
+        img = cv2.cvtColor(npimg, cv2.COLOR_RGB2Lab)
+        pilimg = Image.fromarray(img)
+        return pilimg
+
+# class LAB2Tensor():
+#     def __call__(self, labimg):
+#         labimg = labimg.astype(np.float) / 127
+#         return torch.from_numpy(labimg.transpose(2, 0, 1)).float()
 
 class ColorPerturb():
 
-    def __call__(self, tensor_img):
-        img = tensor_img.numpy()
+    def __call__(self, pilimg):
+        img = np.array(pilimg).astype(np.float)
 
         if np.random.uniform(-2, 1) > 0:
             perturb = np.random.uniform(0.6, 1.4)
-            img[0, :, :] *= perturb
+            img[:, :, 0] *= perturb
 
             perturb = np.random.uniform(0.6, 1.4)
-            img[2, :, :] *= perturb
+            img[:, :, 2] *= perturb
         else:
             tmin = np.random.uniform(0.4, 0.6)
             tmax = np.random.uniform(1.4, 1.6)
-            c, w, h= img.shape
+            w, h, c= img.shape
 
             if np.random.uniform(-1, 1) > 0:
                 dim = h
@@ -90,15 +106,16 @@ class ColorPerturb():
 
             perturb = np.diag(temp)
             if dim == h:
-                img[0, :, :] = np.dot(img[0, :, :], perturb)
-                img[2, :, :] = np.dot(img[2, :, :], perturb)
+                img[:, :, 0] = np.dot(img[:, :, 0], perturb)
+                img[:, :, 2] = np.dot(img[:, :, 2], perturb)
             else:
-                img[0, :, :] = np.dot(perturb, img[0, :, :])
-                img[2, :, :] = np.dot(perturb, img[2, :, :])
+                img[:, :, 0] = np.dot(perturb, img[:, :, 0])
+                img[:, :, 2] = np.dot(perturb, img[:, :, 2])
 
-        if img.max() > 1:
-            img = img / img.max()
-        img = torch.from_numpy(img)
+        if img.max() > 255:
+            img = img / img.max() * 255
+        img = img.astype('uint8')
+        img = Image.fromarray(img)
         return img
 
 class FlatImageFolder(Dataset):
@@ -116,12 +133,12 @@ class FlatImageFolder(Dataset):
     def __getitem__(self, idx):
         path = self.imgs[idx]
         img = Image.open(path).convert('RGB')
-        if self.transform is not None:
-            img = self.transform(img)
-
-        perturb = img.clone()
-
+        perturb = img.copy()
         if self.pert_transform:
             perturb = self.pert_transform(perturb)
+
+        if self.transform is not None:
+            img = self.transform(img)
+            perturb = self.transform(perturb)
 
         return perturb, img
