@@ -132,11 +132,11 @@ def evaluate(args):
                         img.cuda()
                     rec_ab = model(img).cpu()
                     img, rec_ab = img[0], rec_ab[0]
-                    utils.save_labimage(img, osp.join(args.output_dir, filename.replace('.', 'ori.')))
+
+                    utils.save_labimage(img, osp.join(args.output_dir, filename.replace('.', 'pert.')))
                     img[1:] = rec_ab
-                    # print(rec_ab)
-                    # rec_img = torch.cat((img[0, :, :].unsqueeze(0), rec_ab))
-                    save_path = osp.join(args.output_dir, filename)
+
+                    save_path = osp.join(args.output_dir, filename.replace('.', 'rec.'))
                     utils.save_labimage(img, save_path)
 
 
