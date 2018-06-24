@@ -5,6 +5,7 @@ from PIL import Image
 import os.path as osp
 import os
 import torch
+from torch import nn
 import numpy as np
 import math
 
@@ -26,21 +27,20 @@ def load_image(path):
     # img = torch.from_numpy(img).float()
     return img
 
+def save_image(tensor, dir):
+    # if tensor.max() > 1:
+    #     tensor = tensor / tensor.max()
+    img = tensor.clone().mul(255).clamp(0, 255).numpy()
+    img = img.transpose(1, 2, 0).astype('uint8')
+    io.imsave(dir, img)
 
-def save_image(tensor, ori, dir):
+def save_image_preserv_length(tensor, ori, dir):
     if tensor.size() != ori.size():
         print(tensor.size(), ori.size())
-    reclen = tensor.clone() ** 2
-    reclen = reclen.sum(dim=0).sqrt()
+    tensor = normalize(tensor, dim=0)
     orilen = ori.clone() ** 2
-    orilen = orilen.sum(dim=0).sqrt()
-    tensor = tensor / reclen * orilen
-
-    # for i in range(w):
-    #     for j in range(h):
-    #         orilen = math.sqrt((ori[:, i, j] ** 2).sum())
-    #         reclen = math.sqrt((tensor[:, i, j] ** 2).sum())
-    #         tensor[:, i, j] = tensor[:, i, j] / reclen * orilen
+    orilen = orilen.sum(dim=0).sqrt().unsqueeze(0)
+    tensor = tensor * orilen
 
     if tensor.max() > 1:
         tensor = tensor / tensor.max()
@@ -57,6 +57,33 @@ def iter_dir(dir):
                 path = osp.join(root, filename)
                 images.append(path)
     return images
+
+def normalize(tensor, dim):
+    tensorlen = (tensor.clone() ** 2).sum(dim=dim).sqrt().unsqueeze(dim)
+    tensorlen[tensorlen==0] = 1
+    tensor = tensor / tensorlen
+    return tensor
+
+class AngularLoss(nn.Module):
+    def __init__(self, cuda):
+        super(AngularLoss, self).__init__()
+        self.one = torch.tensor(1, dtype=torch.float)
+        if cuda:
+            self.one = self.one.cuda()
+
+    def normalize(self, tensor, dim):
+        tensor = tensor + 1e-10
+        tensorlen = (tensor.clone() ** 2).sum(dim=dim).sqrt().unsqueeze(dim)
+        tensor = tensor / tensorlen
+        return tensor
+
+    def forward(self, input, target):
+        batchsize, _, w, h = input.size()
+        input = self.normalize(input, dim=1)
+        target = self.normalize(target, dim=1)
+        loss = input.mul(target).sum(dim=1).mean()
+        loss = self.one - loss
+        return loss
 
 
 class ColorPerturb():
