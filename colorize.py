@@ -7,7 +7,7 @@ import numpy as np
 
 
 import utils
-from transformer_net import TransformerNet
+from transformer_net import TransformerNet, Discriminator
 
 from skimage import io
 import argparse
@@ -23,7 +23,7 @@ def train(args):
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
 
-    # device = torch.device('cuda' if args.cuda and torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda' if args.cuda and torch.cuda.is_available() else 'cpu')
 
     transform = transforms.Compose([
         transforms.Resize(args.image_size),
@@ -37,10 +37,14 @@ def train(args):
     trainset = utils.FlatImageFolder(args.dataset, transform, pert_transform)
     trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=4)
     model = TransformerNet()
+    D = Discriminator()
+
     if args.gpus is not None:
         model = nn.DataParallel(model, device_ids=args.gpus)
+        D = nn.DataParallel(D, device_ids=args.gpus)
     else:
         model = nn.DataParallel(model)
+        D = nn.DataParallel(D)
     if args.resume:
         state_dict = torch.load(args.resume)
 
@@ -48,40 +52,90 @@ def train(args):
 
     if args.cuda:
         model.cuda()
+        D.cuda()
 
     optimizer = torch.optim.Adam(model.parameters(), args.lr)
-    criterion = nn.MSELoss()
+    optimizerD = torch.optim.Adam(D.parameters(), args.lr*10)
+    criterion = nn.BCELoss()
+    l2lossfn = nn.MSELoss()
 
     start_time = datetime.now()
 
-    gram_weight = 100
-    l2_weight = 5
+    REAL = 1
+    FAKE = 0
+    # gram_weight = 100
+    # l2_weight = 5
+    gan_weight = 1
+
     for e in range(args.epochs):
         model.train()
         count = 0
         acc_loss = 0.0
+        acc_lossD_real = 0.0
+        acc_lossD_fake = 0.0
+        acc_lossD = 0.0
+        acc_lossG = 0.0
+        acc_loss_l2 = 0.0
+        acc_loss_gan = 0.0
         for batchi, (pert_img, ori_img) in enumerate(trainloader):
             count += len(pert_img)
             if args.cuda:
                 pert_img = pert_img.cuda(non_blocking=True)
                 ori_img = ori_img.cuda(non_blocking=True)
 
-            optimizer.zero_grad()
+            batch_size = ori_img.size()[0]
+            real_label = torch.full((batch_size,), REAL, device=device)
+            fake_label = torch.full((batch_size,), FAKE, device=device)
+
+
+            optimizerD.zero_grad()
+            # train with real
+            real_output = D(ori_img)
+            lossD_real = criterion(real_output, real_label)
 
             rec_img = model(pert_img)
-            gram_rec = utils.gram_matrix(rec_img)
-            gram_ori = utils.gram_matrix(ori_img)
-            l2loss = criterion(rec_img, ori_img) * l2_weight
-            gramloss = criterion(gram_rec, gram_ori) * gram_weight
-            # print(l2loss, gramloss)
-            loss = l2loss + gramloss
-            loss.backward()
+            # train with fake
+            fake_output = D(rec_img.detach())
+            lossD_fake = criterion(fake_output, fake_label)
+
+            lossD = lossD_real + lossD_fake
+            lossD.backward()
+            optimizerD.step()
+
+            acc_lossD_real += lossD_real.item()
+            acc_lossD_fake += lossD_fake.item()
+            acc_lossD += lossD.item()
+
+            optimizer.zero_grad()
+            gen_output = D(rec_img)
+            lossGAN = criterion(gen_output, real_label)
+            l2loss = l2lossfn(rec_img, ori_img)
+            lossG = l2loss + lossGAN * gan_weight
+            lossG.backward()
             optimizer.step()
 
-            acc_loss += loss.item()
+            acc_loss_l2 += l2loss.item()
+            acc_loss_gan += lossGAN.item()
+            acc_lossG += lossG.item()
+
+            # gram_rec = utils.gram_matrix(rec_img)
+            # gram_ori = utils.gram_matrix(ori_img)
+            # l2loss = criterion(rec_img, ori_img) * l2_weight
+            # gramloss = criterion(gram_rec, gram_ori) * gram_weight
+            # print(l2loss, gramloss)
+            # loss = l2loss + gramloss
+            # loss = criterion(rec_img, ori_img)
+            # loss.backward()
+            # optimizer.step()
+
+            # acc_loss += loss.item()
             if (batchi + 1) % args.log_interval == 0:
-                mesg = '{}\tEpoch {}: [{}/{}]\ttotal loss: {:.6f}'.format(
-                    time.ctime(), e + 1, count, len(trainset), acc_loss/(batchi + 1))
+                mesg = '{}\tEpoch {}: [{}/{}]\nlossD: {:.6f}, lossD real: {:.6f}, lossD fake: {:.6f}\n ' \
+                       'lossG: {:.6f}, lossGAN: {:.6f}, lossl2: {:.6f}'.format(
+                    time.ctime(), e + 1, count, len(trainset), acc_lossD/(batchi + 1), acc_lossD_real/(batchi + 1),
+                    acc_lossD_fake/(batchi + 1), acc_lossG/(batchi + 1), acc_loss_gan/(batchi + 1), acc_loss_l2/(batchi + 1))
+                # mesg = '{}\tEpoch {}: [{}/{}]\ttotal loss: {:.6f}'.format(
+                #     time.ctime(), e + 1, count, len(trainset), acc_loss/(batchi + 1))
                 print(mesg)
 
         if args.checkpoint_dir and e + 1 != args.epochs:
