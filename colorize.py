@@ -54,8 +54,8 @@ def train(args):
 
     start_time = datetime.now()
 
-    gram_weight = 100
-    l2_weight = 5
+    gram_weight = 1
+    l2_weight = 1
     for e in range(args.epochs):
         model.train()
         count = 0
