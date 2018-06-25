@@ -28,15 +28,14 @@ def load_image(path):
     return img
 
 def save_image(tensor, dir):
-    # if tensor.max() > 1:
-    #     tensor = tensor / tensor.max()
+    if tensor.max() > 1:
+        tensor = tensor / tensor.max()
     img = tensor.clone().mul(255).clamp(0, 255).numpy()
     img = img.transpose(1, 2, 0).astype('uint8')
     io.imsave(dir, img)
 
 def save_image_preserv_length(tensor, ori, dir):
-    if tensor.size() != ori.size():
-        print(tensor.size(), ori.size())
+    # tensor = tensor.clamp(0)
     tensor = normalize(tensor, dim=0)
     orilen = ori.clone() ** 2
     orilen = orilen.sum(dim=0).sqrt().unsqueeze(0)
@@ -48,6 +47,12 @@ def save_image_preserv_length(tensor, ori, dir):
     img = img.transpose(1, 2, 0).astype('uint8')
     io.imsave(dir, img)
 
+def gram_matrix(y):
+    (b, ch, h, w) = y.size()
+    features = y.view(b, ch, w * h)
+    features_t = features.transpose(1, 2)
+    gram = features.bmm(features_t) / (ch * h * w)
+    return gram
 
 def iter_dir(dir):
     images = []
@@ -59,8 +64,9 @@ def iter_dir(dir):
     return images
 
 def normalize(tensor, dim):
+    tensor = tensor.clamp(1e-10)
     tensorlen = (tensor.clone() ** 2).sum(dim=dim).sqrt().unsqueeze(dim)
-    tensorlen[tensorlen==0] = 1
+    # tensorlen[tensorlen==0] = 1
     tensor = tensor / tensorlen
     return tensor
 
@@ -72,7 +78,7 @@ class AngularLoss(nn.Module):
             self.one = self.one.cuda()
 
     def normalize(self, tensor, dim):
-        tensor = tensor + 1e-10
+        tensor = tensor.clamp(1e-10)
         tensorlen = (tensor.clone() ** 2).sum(dim=dim).sqrt().unsqueeze(dim)
         tensor = tensor / tensorlen
         return tensor

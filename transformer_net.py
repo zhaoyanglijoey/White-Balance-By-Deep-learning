@@ -40,7 +40,7 @@ class TransformerNet(nn.Module):
         out = self.res5(out)
         out = self.relu(self.ins4(self.deconv1(out)))
         out = self.relu(self.ins5(self.deconv2(out)))
-        out = self.softplus(self.deconv3(out))
+        out = self.sigmoid(self.deconv3(out))
         return out
 
 

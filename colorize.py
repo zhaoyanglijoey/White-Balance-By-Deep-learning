@@ -50,10 +50,12 @@ def train(args):
         model.cuda()
 
     optimizer = torch.optim.Adam(model.parameters(), args.lr)
-    criterion = utils.AngularLoss(args.cuda)
+    criterion = nn.MSELoss()
 
     start_time = datetime.now()
 
+    gram_weight = 100
+    l2_weight = 5
     for e in range(args.epochs):
         model.train()
         count = 0
@@ -67,7 +69,12 @@ def train(args):
             optimizer.zero_grad()
 
             rec_img = model(pert_img)
-            loss = criterion(rec_img, ori_img)
+            gram_rec = utils.gram_matrix(rec_img)
+            gram_ori = utils.gram_matrix(ori_img)
+            l2loss = criterion(rec_img, ori_img) * l2_weight
+            gramloss = criterion(gram_rec, gram_ori) * gram_weight
+            # print(l2loss, gramloss)
+            loss = l2loss + gramloss
             loss.backward()
             optimizer.step()
 
@@ -77,7 +84,7 @@ def train(args):
                     time.ctime(), e + 1, count, len(trainset), acc_loss/(batchi + 1))
                 print(mesg)
 
-        if args.checkpoint_dir:
+        if args.checkpoint_dir and e + 1 != args.epochs:
             model.eval().cpu()
             ckpt_filename = 'ckpt_epoch_' + str(e+1) + '.pth'
             ckpt_path = osp.join(args.checkpoint_dir, ckpt_filename)
@@ -131,8 +138,7 @@ def evaluate(args):
                     rec_img = model(img).cpu()
                     save_path = osp.join(args.output_dir, filename)
                     # utils.save_image(rec_img[0], save_path)
-                    utils.save_image_preserv_length(rec_img[0], img[0].cpu, save_path)
-
+                    utils.save_image_preserv_length(rec_img[0], img[0].cpu(), save_path)
 
 
 def main():
