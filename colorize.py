@@ -135,10 +135,13 @@ def evaluate(args):
                     img = img.unsqueeze(0)
                     if args.cuda:
                         img.cuda()
-                    rec_img = model(img).cpu()
+                    rec_img = model(img)
+                    if args.cuda:
+                        rec_img = rec_img.cpu()
+                        img = img.cpu()
                     save_path = osp.join(args.output_dir, filename)
                     # utils.save_image(rec_img[0], save_path)
-                    utils.save_image_preserv_length(rec_img[0], img[0].cpu(), save_path)
+                    utils.save_image_preserv_length(rec_img[0], img[0], save_path)
 
 
 def main():
