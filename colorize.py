@@ -54,8 +54,6 @@ def train(args):
 
     start_time = datetime.now()
 
-    gram_weight = 1
-    l2_weight = 1
     for e in range(args.epochs):
         model.train()
         count = 0
@@ -69,12 +67,7 @@ def train(args):
             optimizer.zero_grad()
 
             rec_img = model(pert_img)
-            gram_rec = utils.gram_matrix(rec_img)
-            gram_ori = utils.gram_matrix(ori_img)
-            l2loss = criterion(rec_img, ori_img) * l2_weight
-            gramloss = criterion(gram_rec, gram_ori) * gram_weight
-            # print(l2loss, gramloss)
-            loss = l2loss + gramloss
+            loss = criterion(rec_img, ori_img)
             loss.backward()
             optimizer.step()
 
