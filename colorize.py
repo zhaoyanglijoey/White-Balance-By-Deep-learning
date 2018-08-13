@@ -54,6 +54,8 @@ def train(args):
 
     start_time = datetime.now()
 
+    gram_weight = 1
+    l2_weight = 1
     for e in range(args.epochs):
         model.train()
         count = 0
@@ -66,20 +68,28 @@ def train(args):
 
             optimizer.zero_grad()
 
-            rec_ab = model(pert_img)
-            loss = criterion(rec_ab, ori_img[:, 1:, :, :])
+
+            # rec_ab = model(pert_img)
+            # loss = criterion(rec_ab, ori_img[:, 1:, :, :])
+
+            rec_img = model(pert_img)
+            gram_rec = utils.gram_matrix(rec_img)
+            gram_ori = utils.gram_matrix(ori_img)
+            l2loss = criterion(rec_img, ori_img) * l2_weight
+            gramloss = criterion(gram_rec, gram_ori) * gram_weight
+            # print(l2loss, gramloss)
+            loss = l2loss + gramloss
             loss.backward()
             optimizer.step()
 
             acc_loss += loss.item()
-
             if (batchi + 1) % args.log_interval == 0:
                 mesg = '{}\tEpoch {}: [{}/{}]\ttotal loss: {:.6f}'.format(
                     time.ctime(), e + 1, count, len(trainset), acc_loss/(args.log_interval))
                 print(mesg)
                 acc_loss = 0.0
 
-        if args.checkpoint_dir:
+        if args.checkpoint_dir and e + 1 != args.epochs:
             model.eval().cpu()
             ckpt_filename = 'ckpt_epoch_' + str(e+1) + '.pth'
             ckpt_path = osp.join(args.checkpoint_dir, ckpt_filename)
@@ -129,17 +139,24 @@ def evaluate(args):
                     img = utils.load_labimage(impath)
                     img = img.unsqueeze(0)
                     if args.cuda:
-                        img.cuda()
-                    rec_ab = model(img).cpu()
-                    img, rec_ab = img[0], rec_ab[0]
+                        img = img.cuda()
+                    # rec_ab = model(img).cpu()
+                    # img, rec_ab = img[0], rec_ab[0]
+                    #
+                    # utils.save_labimage(img, osp.join(args.output_dir, filename.replace('.', 'pert.')))
+                    # img[1:] = rec_ab
+                    #
+                    # save_path = osp.join(args.output_dir, filename.replace('.', 'rec.'))
+                    # utils.save_labimage(img, save_path)
 
-                    utils.save_labimage(img, osp.join(args.output_dir, filename.replace('.', 'pert.')))
-                    img[1:] = rec_ab
 
-                    save_path = osp.join(args.output_dir, filename.replace('.', 'rec.'))
-                    utils.save_labimage(img, save_path)
-
-
+                    rec_img = model(img)
+                    if args.cuda:
+                        rec_img = rec_img.cpu()
+                        img = img.cpu()
+                    save_path = osp.join(args.output_dir, filename)
+                    # utils.save_image(rec_img[0], save_path)
+                    utils.save_image_preserv_length(rec_img[0], img[0], save_path)
 
 
 def main():
@@ -157,7 +174,8 @@ def main():
     train_parser.add_argument('--cuda', action='store_true', default=False, help='run on GPU')
     train_parser.add_argument('--seed', type=int, default=42, help='random seed for training')
     train_parser.add_argument('--lr', type=float, default=1e-3, help='learning rate, default is 0.001')
-    train_parser.add_argument('--log-interval', type=int, default=100, help='number of batches after which the training loss is logged,'
+
+    train_parser.add_argument('--log-interval', type=int, default=100, help='number of images after which the training loss is logged,'
                                                                             ' default is 100')
     train_parser.add_argument('--checkpoint-dir', default=None, help='checkpoint model saving directory')
     train_parser.add_argument('--resume', default=None, help='resume training from saved model')

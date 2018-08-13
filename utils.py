@@ -5,6 +5,7 @@ from PIL import Image
 import os.path as osp
 import os
 import torch
+from torch import nn
 import numpy as np
 import math
 import cv2
@@ -33,14 +34,22 @@ def load_labimage(path):
     img = transforms.ToTensor()(img)
     return img
 
-def save_image(tensor, ori, dir):
-    if tensor.size() != ori.size():
-        print(tensor.size(), ori.size())
-    reclen = tensor.clone() ** 2
-    reclen = reclen.sum(dim=0).sqrt()
+
+def save_image(tensor, dir):
+    if tensor.max() > 1:
+        tensor = tensor / tensor.max()
+    img = tensor.clone().mul(255).clamp(0, 255).numpy()
+    img = img.transpose(1, 2, 0).astype('uint8')
+    io.imsave(dir, img)
+
+def save_image_preserv_length(tensor, ori, dir):
+    # tensor = tensor.clamp(0)
+    tensor = normalize(tensor, dim=0)
     orilen = ori.clone() ** 2
-    orilen = orilen.sum(dim=0).sqrt()
-    tensor = tensor / reclen * orilen
+
+
+    orilen = orilen.sum(dim=0).sqrt().unsqueeze(0)
+    tensor = tensor * orilen
 
     if tensor.max() > 1:
         tensor = tensor / tensor.max()
@@ -53,6 +62,13 @@ def save_labimage(tensor, dir):
     img = img.transpose(1, 2, 0).astype('uint8')
     img = cv2.cvtColor(img, cv2.COLOR_Lab2RGB)
     io.imsave(dir, img)
+
+def gram_matrix(y):
+    (b, ch, h, w) = y.size()
+    features = y.view(b, ch, w * h)
+    features_t = features.transpose(1, 2)
+    gram = features.bmm(features_t) / (ch * h * w)
+    return gram
 
 def iter_dir(dir):
     images = []
@@ -74,6 +90,35 @@ class RGB2LAB():
 #     def __call__(self, labimg):
 #         labimg = labimg.astype(np.float) / 127
 #         return torch.from_numpy(labimg.transpose(2, 0, 1)).float()
+
+def normalize(tensor, dim):
+    tensor = tensor.clamp(1e-10)
+    tensorlen = (tensor.clone() ** 2).sum(dim=dim).sqrt().unsqueeze(dim)
+    # tensorlen[tensorlen==0] = 1
+    tensor = tensor / tensorlen
+    return tensor
+
+class AngularLoss(nn.Module):
+    def __init__(self, cuda):
+        super(AngularLoss, self).__init__()
+        self.one = torch.tensor(1, dtype=torch.float)
+        if cuda:
+            self.one = self.one.cuda()
+
+    def normalize(self, tensor, dim):
+        tensor = tensor.clamp(1e-10)
+        tensorlen = (tensor.clone() ** 2).sum(dim=dim).sqrt().unsqueeze(dim)
+        tensor = tensor / tensorlen
+        return tensor
+
+    def forward(self, input, target):
+        batchsize, _, w, h = input.size()
+        input = self.normalize(input, dim=1)
+        target = self.normalize(target, dim=1)
+        loss = input.mul(target).sum(dim=1).mean()
+        loss = self.one - loss
+        return loss
+
 
 class ColorPerturb():
 
