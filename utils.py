@@ -46,8 +46,6 @@ def save_image_preserv_length(tensor, ori, dir):
     # tensor = tensor.clamp(0)
     tensor = normalize(tensor, dim=0)
     orilen = ori.clone() ** 2
-
-
     orilen = orilen.sum(dim=0).sqrt().unsqueeze(0)
     tensor = tensor * orilen
 
