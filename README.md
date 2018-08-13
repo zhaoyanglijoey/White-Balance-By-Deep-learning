@@ -52,7 +52,7 @@ optional arguments:
 
 ```
 
-/<dataset_dir/> should be a directory containing images, for example mscoco train 2014 dataset.
+\<dataset_dir\> should be a directory containing images, for example mscoco train 2014 dataset.
 
 Use `--resume` to resume from checkpoint
 
