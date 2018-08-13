@@ -52,6 +52,10 @@ optional arguments:
 
 ```
 
+/<dataset_dir/> should be a directory containing images, for example mscoco train 2014 dataset.
+
+Use `--resume` to resume from checkpoint
+
 ### Evaluating
 `python3 colorize.py eval --input-dir <input_dir> --output-dir <output_dir> --model <model>`
 
