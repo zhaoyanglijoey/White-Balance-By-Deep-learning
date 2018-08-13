@@ -1,6 +1,6 @@
 from torch.utils.data import Dataset
 from torchvision import transforms
-from skimage import io
+from skimage import io, color
 from PIL import Image
 import os.path as osp
 import os
@@ -8,6 +8,7 @@ import torch
 from torch import nn
 import numpy as np
 import math
+import cv2
 
 IMG_EXTENSIONS = [
     '.jpg', '.JPG', '.jpeg', '.JPEG',
@@ -26,6 +27,13 @@ def load_image(path):
     # img = img.transpose(2, 0, 1)
     # img = torch.from_numpy(img).float()
     return img
+
+def load_labimage(path):
+    img = Image.open(path).convert('RGB')
+    img = RGB2LAB()(img)
+    img = transforms.ToTensor()(img)
+    return img
+
 
 def save_image(tensor, dir):
     if tensor.max() > 1:
@@ -47,6 +55,12 @@ def save_image_preserv_length(tensor, ori, dir):
     img = img.transpose(1, 2, 0).astype('uint8')
     io.imsave(dir, img)
 
+def save_labimage(tensor, dir):
+    img = tensor.clone().mul(255).clamp(0, 255).numpy()
+    img = img.transpose(1, 2, 0).astype('uint8')
+    img = cv2.cvtColor(img, cv2.COLOR_Lab2RGB)
+    io.imsave(dir, img)
+
 def gram_matrix(y):
     (b, ch, h, w) = y.size()
     features = y.view(b, ch, w * h)
@@ -62,6 +76,18 @@ def iter_dir(dir):
                 path = osp.join(root, filename)
                 images.append(path)
     return images
+
+class RGB2LAB():
+    def __call__(self, img):
+        npimg = np.array(img)
+        img = cv2.cvtColor(npimg, cv2.COLOR_RGB2Lab)
+        pilimg = Image.fromarray(img)
+        return pilimg
+
+# class LAB2Tensor():
+#     def __call__(self, labimg):
+#         labimg = labimg.astype(np.float) / 127
+#         return torch.from_numpy(labimg.transpose(2, 0, 1)).float()
 
 def normalize(tensor, dim):
     tensor = tensor.clamp(1e-10)

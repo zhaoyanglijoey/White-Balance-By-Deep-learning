@@ -28,8 +28,9 @@ def train(args):
     transform = transforms.Compose([
         transforms.Resize(args.image_size),
         transforms.CenterCrop(args.image_size),
+        # utils.RGB2LAB(),
         transforms.ToTensor(),
-        # transforms.Lambda(lambda x: x.mul(255))
+        # utils.LAB2Tensor(),
     ])
     pert_transform = transforms.Compose([
         utils.ColorPerturb()
@@ -43,7 +44,6 @@ def train(args):
         model = nn.DataParallel(model)
     if args.resume:
         state_dict = torch.load(args.resume)
-
         model.load_state_dict(state_dict)
 
     if args.cuda:
@@ -74,8 +74,9 @@ def train(args):
             acc_loss += loss.item()
             if (batchi + 1) % args.log_interval == 0:
                 mesg = '{}\tEpoch {}: [{}/{}]\ttotal loss: {:.6f}'.format(
-                    time.ctime(), e + 1, count, len(trainset), acc_loss/(batchi + 1))
+                    time.ctime(), e + 1, count, len(trainset), acc_loss/(args.log_interval))
                 print(mesg)
+                acc_loss = 0.0
 
         if args.checkpoint_dir and e + 1 != args.epochs:
             model.eval().cpu()
@@ -146,12 +147,13 @@ def main():
     train_parser.add_argument('--batch-size', type=int, default=30, help='training batch size, default is 30')
     train_parser.add_argument('--dataset', required=True, help='path to training dataset, the path should '
                                 'point to a folder containing another folder with all the training images')
-    train_parser.add_argument('--save-model-dir', default='model', help='directory of the model to be saved')
+    train_parser.add_argument('--save-model-dir', default='model', help='directory of the model to be saved, default is model/')
     train_parser.add_argument('--save-model-name', default=None, help='save model name')
     train_parser.add_argument('--image-size', type=int, default=256, help='size of training images, default is 256')
     train_parser.add_argument('--cuda', action='store_true', default=False, help='run on GPU')
     train_parser.add_argument('--seed', type=int, default=42, help='random seed for training')
     train_parser.add_argument('--lr', type=float, default=1e-3, help='learning rate, default is 0.001')
+
     train_parser.add_argument('--log-interval', type=int, default=100, help='number of images after which the training loss is logged,'
                                                                             ' default is 100')
     train_parser.add_argument('--checkpoint-dir', default=None, help='checkpoint model saving directory')
